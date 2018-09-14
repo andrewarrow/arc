@@ -5,14 +5,16 @@ import "net"
 import "bufio"
 
 type Client struct {
-	ip    string
-	conns []net.Conn
+	ip      string
+	conns   []net.Conn
+	markers []bool
 }
 
 func NewClient(ip string, size int) *Client {
 	c := Client{}
 	c.ip = ip
 	c.conns = make([]net.Conn, size)
+	c.markers = make([]bool, size)
 	for i, _ := range c.conns {
 		c.conns[i] = connect(ip)
 	}
@@ -31,10 +33,21 @@ func connect(ip string) net.Conn {
 	return connp
 }
 
+func (c *Client) conn() net.Conn {
+	for i, conn := range c.conns {
+		if c.markers[i] == false {
+			c.markers[i] = true
+			return conn
+		}
+	}
+	return nil
+}
+
 func (c *Client) Get(key string) string {
-	c.write("*2\r\n$3\r\nGET\r\n$2\r\nhi\r\n")
+	conn := c.conn()
+	write(conn, "*2\r\n$3\r\nGET\r\n$2\r\nhi\r\n")
 	p := make([]byte, 1024)
-	leni, _ := bufio.NewReader(c.conns[0]).Read(p)
+	leni, _ := bufio.NewReader(conn).Read(p)
 	if leni > 0 {
 		payload := string(p[0:leni])
 		fmt.Printf("%s\n", payload)
@@ -42,8 +55,8 @@ func (c *Client) Get(key string) string {
 	return ""
 }
 
-func (c *Client) write(s string) error {
-	_, err := c.conns[0].Write([]byte(s))
+func write(conn net.Conn, s string) error {
+	_, err := conn.Write([]byte(s))
 	if err != nil {
 		fmt.Printf("Some error %v\n", err)
 	}
