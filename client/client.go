@@ -1,6 +1,8 @@
 package client
 
 import "fmt"
+import "time"
+import "sync"
 import "net"
 import "bufio"
 
@@ -8,6 +10,7 @@ type Client struct {
 	ip      string
 	conns   []net.Conn
 	markers []bool
+	mu      sync.Mutex
 }
 
 func NewClient(ip string, size int) *Client {
@@ -33,7 +36,19 @@ func connect(ip string) net.Conn {
 	return connp
 }
 
+func (c *Client) findConn() (net.Conn, int) {
+	for {
+		conn, i := c.conn()
+		if i > -1 {
+			return conn, i
+		}
+		time.Sleep(time.Millisecond * 20)
+	}
+}
+
 func (c *Client) conn() (net.Conn, int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	for i, conn := range c.conns {
 		if c.markers[i] == false {
 			c.markers[i] = true
@@ -44,11 +59,13 @@ func (c *Client) conn() (net.Conn, int) {
 }
 
 func (c *Client) release(i int) {
-	fmt.Println("ff")
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.markers[i] = false
 }
 
 func (c *Client) Get(key string) string {
-	conn, i := c.conn()
+	conn, i := c.findConn()
 	defer c.release(i)
 	write(conn, "*2\r\n$3\r\nGET\r\n$2\r\nhi\r\n")
 	p := make([]byte, 1024)
