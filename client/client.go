@@ -67,20 +67,36 @@ func (c *Client) release(i int) {
 func (c *Client) Get(key string) string {
 	conn, i := c.findConn()
 	defer c.release(i)
-	write(conn, "*2\r\n$3\r\nGET\r\n$2\r\nhi\r\n")
+	c.write(conn, i, "*2\r\n$3\r\nGET\r\n$2\r\nhi\r\n")
+	val := c.read(conn, i)
+	return val
+}
+
+func (c *Client) read(conn net.Conn, i int) string {
 	p := make([]byte, 1024)
-	leni, _ := bufio.NewReader(conn).Read(p)
+	leni, err := bufio.NewReader(conn).Read(p)
+	if err != nil {
+		fmt.Printf("Some error %v\n", err)
+		conn.Close()
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		c.conns[i] = connect(c.ip)
+	}
 	if leni > 0 {
 		payload := string(p[0:leni])
-		fmt.Printf("%s\n", payload)
+		return payload
 	}
 	return ""
 }
 
-func write(conn net.Conn, s string) error {
+func (c *Client) write(conn net.Conn, i int, s string) error {
 	_, err := conn.Write([]byte(s))
 	if err != nil {
 		fmt.Printf("Some error %v\n", err)
+		conn.Close()
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		c.conns[i] = connect(c.ip)
 	}
 	return err
 }
