@@ -33,18 +33,23 @@ func connect(ip string) net.Conn {
 	return connp
 }
 
-func (c *Client) conn() net.Conn {
+func (c *Client) conn() (net.Conn, int) {
 	for i, conn := range c.conns {
 		if c.markers[i] == false {
 			c.markers[i] = true
-			return conn
+			return conn, i
 		}
 	}
-	return nil
+	return nil, -1
+}
+
+func (c *Client) release(i int) {
+	fmt.Println("ff")
 }
 
 func (c *Client) Get(key string) string {
-	conn := c.conn()
+	conn, i := c.conn()
+	defer c.release(i)
 	write(conn, "*2\r\n$3\r\nGET\r\n$2\r\nhi\r\n")
 	p := make([]byte, 1024)
 	leni, _ := bufio.NewReader(conn).Read(p)
